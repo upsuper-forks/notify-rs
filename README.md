@@ -36,110 +36,41 @@ crossbeam-channel = "0.4.0"
 notify = "5.0.0-pre.14"
 ```
 
-## Usage
+## Usage (5.0.0-pre.14)
 
 The examples below are aspirational only, to preview what the final release may
 have looked like. They may not work. Refer to [the API documentation][docs] instead.
 
 ```rust
-use notify::{RecommendedWatcher, RecursiveMode, Result, watcher};
-use std::time::Duration;
+use notify::{RecommendedWatcher, RecursiveMode, Watcher};
+use std::path::Path;
 
-fn main() -> Result<()> {
+fn main() -> notify::Result<()> {
+    let (tx, rx) = std::sync::mpsc::channel();
+
     // Automatically select the best implementation for your platform.
     // You can also access each implementation directly e.g. INotifyWatcher.
-    let mut watcher = watcher(Duration::from_secs(2))?;
+    // Note that dropping this `watcher` will exit the Watcher-Loop itself.
+    let mut watcher = RecommendedWatcher::new(tx)?;
 
     // Add a path to be watched. All files and directories at that path and
     // below will be monitored for changes.
-    watcher.watch("/home/test/notify", RecursiveMode::Recursive)?;
+    watcher.watch(Path::new("."), RecursiveMode::Recursive)?;
 
-    // This is a simple loop, but you may want to use more complex logic here,
-    // for example to handle I/O.
-    for event in &watcher {
-        match event {
-            Ok(event) => println!("changed: {:?}", event.path),
-            Err(err) => println!("watch error: {:?}", err),
-        };
+    for res in rx {
+        match res {
+            Ok(event) => println!("changed: {:?}", event),
+            Err(e) => println!("watch error: {:?}", e),
+        }
     }
 
     Ok(())
 }
 ```
 
-### With a channel
+### Missing in 5.0.0-pre.14 currently
 
-To get a channel for advanced or flexible cases, use:
-
-```rust
-let rx = watcher.channel();
-
-loop {
-    match rx.recv() {
-        // ...
-    }
-}
-```
-
-To pass in a channel manually:
-
-```rust
-let (tx, rx) = crossbeam_channel::unbounded();
-let mut watcher: RecommendedWatcher = Watcher::with_channel(tx, Duration::from_secs(2))?;
-
-for event in rx.iter() {
-    // ...
-}
-```
-
-### With precise events
-
-By default, Notify issues generic events that carry little additional
-information beyond what path was affected. On some platforms, more is
-available; stay aware though that how exactly that manifests varies. To enable
-precise events, use:
-
-```rust
-use notify::Config;
-watcher.configure(Config::PreciseEvents(true));
-```
-
-### With notice events
-
-Sometimes you want to respond to some events straight away, but not give up the
-advantages of debouncing. Notice events appear once immediately when the occur
-during a debouncing period, and then a second time as usual at the end of the
-debouncing period:
-
-```rust
-use notify::Config;
-watcher.configure(Config::NoticeEvents(true));
-```
-
-### With ongoing events
-
-Sometimes frequent writes may be missed or not noticed often enough. Ongoing
-write events can be enabled to emit more events even while debouncing:
-
-```rust
-use notify::Config;
-watcher.configure(Config::OngoingEvents(Some(Duration::from_millis(500))));
-```
-
-### Without debouncing
-
-To receive events as they are emitted, without debouncing at all:
-
-```rust
-let mut watcher = immediate_watcher()?;
-```
-
-With a channel:
-
-```rust
-let (tx, rx) = unbounded();
-let mut watcher: RecommendedWatcher = Watcher::immediate_with_channel(tx)?;
-```
+The debouncer can currently only be found in v4.
 
 ### Serde
 
